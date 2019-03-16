@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 import urllib.request
 import posixpath
-from urllib.parse import urlparse, urljoin, urlunparse
+from urllib.parse import urlparse, urljoin, urlunparse, quote, unquote
 from selenium.webdriver.firefox.options import Options
 import re
 
@@ -30,6 +30,10 @@ def urlCleaner(url):
     """
     :param url: url
     :return: urlunparse, so basically url that was processed
+    url1 = "https://cs.indiana.edu/%7Efil/"
+    url2 = "https://cs.indiana.edu/My File.html"
+    url3 = "https://cs.indiana.edu/%7Efil/My File.html"
+
 
     description:
     1. remove port number (done)**
@@ -40,31 +44,43 @@ def urlCleaner(url):
     6. remove default file name sth/index.html -> sth/ (done)**
                                     index.php -> so basically i guess index.* (done)**
     hard part
-    7. decode needlessly encoded characters
-    8. disallowed characters encoded
+    7. decode needlessly encoded characters from urllib.parse import quote, unquote
+    8. disallowed characters encoded  from urllib.parse import quote, unquote
     9. netloc to lowercase (done)**
 
     ### only use http, not https (done)**
     """
     parsed = urlparse(url)
-    # check if path only root, empty, et cetera
     path = posixpath.normpath(parsed.path)
+    #if path only root (current pos), normalize returns ., change it to "/"
     path = "/" if path == "." else path
-
     # try to remove if default filename
     path = re.sub(defaultFile, '', path)
 
     if not bool(re.search(fileEnd, path)) and not path.endswith("/"):
         path += "/"
 
+    # decode path to fullblown unicode
+    path = unquote(path)
+    # encode, but only those outside ascii and unsafe
+    path = quote(path, safe=":_.-/~")
+    # do the same for query ...
+    query = quote(unquote(parsed.query), safe=":_.-/~")
+
+    # if not empty, it is an url with netloc and not just some relative path
+    netloc = ''
+    if parsed.netloc:
+        tmp = str.lower(parsed.netloc.replace(':'+str(parsed.port), ''))
+        netloc = tmp if tmp.startswith("www") else "www."+tmp
+
     url = urlunparse(
         (
             parsed.scheme.replace('s', ''),
-            str.lower(parsed.netloc.replace(':'+str(parsed.port), '')),
+            netloc,
             path,
             parsed.params,
-            parsed.query,
-            '' # parsed.fragment
+            query,
+            '' # parsed.fragment, remove fragments
         )
     )
     return url
@@ -102,7 +118,6 @@ def possiblyExtendUrl(baseUrl, relUrl):
         # normalize possible unnormalized relUrl
         # ex: //r/lib/ok/notok/../../a -> //r/lib/a
         url = urlCleaner(relUrl)
-    print(url)
     return url
 
 # some tests
@@ -112,6 +127,26 @@ print(possiblyExtendUrl('http://www.test.com/abc', '././test'))
 print(possiblyExtendUrl('http://www.test.com/abc', './miska/test'))
 print(possiblyExtendUrl('http://www.test.com/abc', '//a/b/./../../test'))
 print(possiblyExtendUrl('http://www.test.com:8080/abc', '/../test'))
+
+# tests on canonization ... first slides 16th page
+print(urlCleaner("http://cs.indiana.edu:80/"))
+print(urlCleaner("http://cs.indiana.edu"))
+print(urlCleaner("http://cs.indiana.edu/People"))
+print(urlCleaner("http://cs.indiana.edu/faq.html#3"))
+print(urlCleaner("http://cs.indiana.edu/a/./../b"))
+print(urlCleaner("http://cs.indiana.edu/a/./../b/"))
+print(urlCleaner("http://cs.indiana.edu/a/./index.php"))
+print(urlCleaner("http://cs.indiana.edu/a/./index.html"))
+print(urlCleaner("http://cs.indiana.edu/index"))
+print(urlCleaner("http://cs.InDiana.edu/a/"))
+print(urlCleaner("https://cs.indiana.edu/%7Efil/"))
+print(urlCleaner("https://cs.indiana.edu/My File.html"))
+print(urlCleaner("https://cs.indiana.edu/%7Efil/My File.html"))
+print(urlCleaner("https://cs.indiana.edu/%7Efil/My FileŽ.html"))
+# Copatek shared some url tests
+print(urlCleaner("http://www.google.com/#test")) # - da vrže preč #test
+print(urlCleaner("http://delo.si/")) # - da doda www.
+print(urlCleaner("https://www.google.com:443/test")) # -  vrže vn port number
 # tests end
 
 

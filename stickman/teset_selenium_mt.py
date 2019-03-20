@@ -70,46 +70,10 @@ class Crawler:
 
     def start_crawling(self):
         while self.frontier:
-            #create soup elements from sites in the frontier without parallel, because soup doesn't work in threads
-            for url in self.frontier[:self.threadnum]:
-                print("-------------------------------------------------------------------")
-                #set options for headless browsing
-                options = Options()
-                options.headless = True
-
-                #check for robots.txt and parse if exists
-                print(f"Finding and parsing robots.txt for {url}")
-                rh = RobotsTxtHandler(url)
-
-                print(f"Sleeping for {rh.crawl_delay} seconds")
-                #sleep for the crawl_delay, default 4s
-                time.sleep(rh.crawl_delay)
-
-                #set up the driver
-                driver = webdriver.Chrome(options=options)
-
-                print(f"Fetching html for {url}")
-                #fetch html
-                driver.get(url)
-                html = driver.page_source
-
-                #close driver
-                driver.close()
-
-                #add url to visited
-                self.visited.add(url)
-
-                #store html to soup and save it for multithreaded processing
-                soup = BeautifulSoup(html, "lxml")
-                self.waiting_for_processing.append(soup)
-
-                print(f"Stored BS for: {url}")
-            print("-------------------------------------------------------------------")
-            print(f"Launching {self.threadnum} workers to pars the sites. Currently the size of the frontier is {len(self.frontier)}")
 
             #launch workers
-            for i in range(len(self.waiting_for_processing[:self.threadnum])):
-                t = Thread(target=self.store_processed_to_queue(self.frontier[i], self.waiting_for_processing[i], rh.disallow))
+            for url in self.frontier[:self.threadnum]:
+                t = Thread(target=self.store_processed_to_queue, args=(url,))
                 t.start()
                 self.workers.append(t)
 
@@ -122,7 +86,7 @@ class Crawler:
             #wait for workers to finish
             for thread in self.workers:
                 thread.join()
-
+            print(f"The length of the frontier is {len(self.frontier)}")
             #we have to remove the visited sites from the frontier
             #we also have to remove the stored bs for sites
             for i in range(len(self.waiting_for_processing)):
@@ -139,8 +103,38 @@ class Crawler:
                     if link not in self.visited:
                         self.frontier.append(link)
 
-    def store_processed_to_queue(self, url, soup, robots):
-        self.q.put(self.parsePage(url, soup, robots))
+    def store_processed_to_queue(self, url):
+
+        # set options for headless browsing
+        print(f"Working for {url}")
+        options = Options()
+        options.headless = True
+
+        # check for robots.txt and parse if exists
+
+        rh = RobotsTxtHandler(url)
+
+        # sleep for the crawl_delay, default 4s
+        time.sleep(rh.crawl_delay)
+
+        # set up the driver
+        driver = webdriver.Chrome(options=options)
+
+        # fetch html
+        driver.get(url)
+        html = driver.page_source
+
+        # close driver
+        driver.close()
+
+        # add url to visited
+        self.visited.add(url)
+
+        # store html to soup and save it for multithreaded processing
+        soup = BeautifulSoup(html, "lxml")
+        self.waiting_for_processing.append(soup)
+
+        self.q.put(self.parsePage(url, soup, rh.disallow))
 
 
     def process_soup(self, soup):

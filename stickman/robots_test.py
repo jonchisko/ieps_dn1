@@ -10,19 +10,18 @@ Make sure to respect robots.txt as sites that define special crawling rules ofte
 #Function parses the robots.txt file of a site and returns a list of link in the sitemap,
 #list of disallowed postfixes and the crawl delay. If nothing is found then the lists are empty and the crawl delay is 4
 def parse_robots(text):
-    viable = text.split("User-agent:*")[1].split("User-agent:")[0]
+    viable = text.split("User-agent: *")[1].split("User-agent:")[0]
     sitemap = []
     disallow = []
     crawl_delay = 4
     for line in viable.split("\n"):
-        if "Sitemap: " in line:
-            sitemap.append(line.split("Sitemap: ")[1])
         if "Disallow: " in line:
             disallow.append(line.split("Disallow: ")[1])
         if "Crawl-delay: " in line:
             crawl_delay = int(line.split("Crawl-delay: ")[1])
-
-    print(sitemap, disallow, crawl_delay)
+    for line in  text.split("\n"):
+        if "Sitemaps: " in line:
+            sitemap.append(line.split("Sitemap: ")[1])
     return sitemap, disallow, crawl_delay
 
 
@@ -37,19 +36,14 @@ class RobotsTxtHandler:
         #fetch the page
         self.response = requests.get(self.link)
 
-        print("TUKI")
         #if the page exist and is accessible then parse the file and set the class attributes accordingly
         try:
             self.response.raise_for_status()
-            print("TUKI2")
-            print(self.response.text)
-            a = parse_robots(self.response.text)
-            print("TUKITUKIasdsasd")
-            self.sitemap, self.disallow, self.crawl_delay = 1, 2, 3
-            print("TUKITUKI")
+            self.sitemap, self.disallow, self.crawl_delay = parse_robots(self.response.text)
+
         #if raise for status triggers and exception assume that there is no robots.txt file and set attributes to default values
         except Exception as e:
-            print(e)
+            #print(f"Exception was triggered while fetching: {e}")
             self.sitemap, self.disallow, self.crawl_delay = [], [], 4
 
 

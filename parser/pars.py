@@ -150,12 +150,12 @@ class htmlGetAll:
             urls.remove(base_url)
 
         for img in htmlSoup.find_all("img"):
-            imgUrl1, imgUrl2 = img.get("data-src"), img.get("src")
-            if imgUrl1:
-                imgs.add(imgUrl1)
-                continue
-            if imgUrl2:
-                imgs.add(imgUrl2)
+            imgUrl = img.get("src")
+            if imgUrl:
+                # extend
+                imgUrl = htmlGetAll.possiblyExtendUrl(base_url, imgUrl, robots)
+                # some imgs start with // and cant be reached like that ...
+                imgs.add(imgUrl.replace("//", "") if imgUrl.startswith("//") else imgUrl)
         return urls, files, imgs
 
 
@@ -166,15 +166,15 @@ if __name__ == '__main__':
 
     driver = webdriver.Firefox(options=options)
     # driver.get("https://www.rtvslo.si/")
-    driver.get("http://www.vlada.si/teme_in_projekti/strategija_razvoja_slovenije_2030/")#"http://www.gov.si/")
+    driver.get("http://rtvslo.si")#"http://www.gov.si/")
     # driver.get("https://www.pexels.com/search/beauty/")
     html = driver.page_source
-    soup = BeautifulSoup(html)
+    soup = BeautifulSoup(html, "lxml")
     for tag in soup.find_all('title'):
         print(tag.text)
 
     # some tests
-    print(htmlGetAll.possiblyExtendUrl('http://www.test.com/', './../me'))
+    """print(htmlGetAll.possiblyExtendUrl('http://www.test.com/', './../me'))
     print(htmlGetAll.possiblyExtendUrl('http://www.test.com/abc', './../../test'))
     print(htmlGetAll.possiblyExtendUrl('http://www.test.com/abc', '././test'))
     print(htmlGetAll.possiblyExtendUrl('http://www.test.com/abc', './miska/test'))
@@ -199,7 +199,7 @@ if __name__ == '__main__':
     # Copatek shared some url tests
     print(htmlGetAll.urlCleaner("http://www.google.com/#test")) # - da vrže preč #test
     print(htmlGetAll.urlCleaner("http://delo.si/")) # - da doda www.
-    print(htmlGetAll.urlCleaner("https://www.google.com:443/test")) # -  vrže vn port number
+    print(htmlGetAll.urlCleaner("https://www.google.com:443/test")) # -  vrže vn port number"""
 
 
 
@@ -223,8 +223,8 @@ if __name__ == '__main__':
 
 
     # test gov
-
-    results = htmlGetAll.doPage(driver.current_url, soup)
+    robots=[]
+    results = htmlGetAll.doPage(driver.current_url, soup, robots)
     for e in results:
         print(e)
 

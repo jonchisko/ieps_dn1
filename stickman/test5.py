@@ -4,7 +4,9 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from multiprocessing import Queue
-from parser.pars import htmlGetAll
+from pars import htmlGetAll
+from robots_test import *
+import time
 import requests
 
 """def th(bs):
@@ -61,23 +63,43 @@ class Crawler:
 
         #create soup elements from sites in the frontier without parallel, because soup doesn't work in threads
         for url in self.frontier:
+
+            #set options for headless browsing
             options = Options()
             options.headless = True
 
+            #check for robots.txt and parse if exists
+            rh = RobotsTxtHandler(url)
+
+            #sleep for the crawl_delay, default 4s
+            time.sleep(rh.crawl_delay)
+
+            #set up the driver
             driver = webdriver.Chrome(options=options)
+
+            #fetch html
             driver.get(url)
             html = driver.page_source
+
+            #close driver
             driver.close()
+
+
+            #store html to soup and save it for multithreaded processing
             soup = BeautifulSoup(html, "lxml")
             self.waiting_for_processing.append(soup)
 
-            print(f"Stored {url}")
+            print(f"Stored BS for: {url}")
 
-        #launch threads for working
-        for unprocessed in self.waiting_for_processing[:self.threadnum]:
-            t = Thread(target=self.store_processed_to_queue(unprocessed), args=(unprocessed))
+        #launch workers
+        for i in range(len(self.waiting_for_processing[:self.threadnum])):
+            t = Thread(target=self.store_processed_to_queue(self.frontier[i], self.waiting_for_processing[i], rh.disallow))
             t.start()
             self.workers.append(t)
+        """for unprocessed in self.waiting_for_processing[:self.threadnum]:
+            t = Thread(target=self.store_processed_to_queue(unprocessed), args=(unprocessed))
+            t.start()
+            self.workers.append(t)"""
 
         #wait for workers to finish
         for thread in self.workers:
@@ -88,8 +110,8 @@ class Crawler:
         while not self.q.empty():
             print(self.q.get())
 
-    def store_processed_to_queue(self, url, soup):
-        self.q.put(self.parsePage(url, soup))
+    def store_processed_to_queue(self, url, soup, robots):
+        self.q.put(self.parsePage(url, soup, robots))
 
 
     def process_soup(self, soup):

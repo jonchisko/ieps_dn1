@@ -64,12 +64,12 @@ class Crawler:
         self.frontier = ["http://evem.gov.si", "http://e-uprava.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"]
         self.q = Queue()
         self.workers = []
-        self.waiting_for_processing = []
-        self.visited = set()
+        self.visited = set(["http://evem.gov.si", "http://e-uprava.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"])
 
 
     def start_crawling(self):
-        while self.frontier:
+        iii = 5
+        while iii > 0:
 
             #launch workers
             for url in self.frontier[:self.threadnum]:
@@ -89,19 +89,26 @@ class Crawler:
             print(f"The length of the frontier is {len(self.frontier)}")
             #we have to remove the visited sites from the frontier
             #we also have to remove the stored bs for sites
-            for i in range(len(self.waiting_for_processing)):
+            for i in range(self.threadnum):
                 del self.frontier[0]
-                del self.waiting_for_processing[0]
 
+
+            print("Pobiram rezultat")
             #print out the results of crawling on lvl 1
             #the parser returns (url, set(urls), set(files), set(images))
             #now we have to empty the q, store stuff to the data base in feed everything to the frontier correctly
             while not self.q.empty():
+
                 original_url, links, files, images = self.q.get()
-                #self.frontier.extend(links)
+
+                print(f"Adding links from {original_url} to frontier:")
                 for link in links:
                     if link not in self.visited:
+                        self.visited.add(link)
+                        print(f"   - added: {link}")
                         self.frontier.append(link)
+
+            iii -= 1
 
     def store_processed_to_queue(self, url):
 
@@ -132,10 +139,10 @@ class Crawler:
 
         # store html to soup and save it for multithreaded processing
         soup = BeautifulSoup(html, "lxml")
-        self.waiting_for_processing.append(soup)
 
         self.q.put(self.parsePage(url, soup, rh.disallow))
 
+        print(f"Done working for {url}")
 
     def process_soup(self, soup):
         rezultat = []
@@ -173,3 +180,4 @@ class Crawler:
 crw = Crawler(4)
 
 crw.start_crawling()
+

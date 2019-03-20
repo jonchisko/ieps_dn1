@@ -137,15 +137,18 @@ class Crawler:
         # TODO: status codes, check if unique urls, insert files, imgs into db
 
     # function checks if page needs selenium
-    def checkPage(self, url):
+    def getPage(self, url):
         # get http head
         # head = requests.head(url)
         pass
 
-    # get page
-    def getPage(self, url):
+    # get page with requests
+    def getPageR(self, url):
         pass
 
+    # get page with selenium
+    def getPageS(self, url):
+        pass
 
 crw = Crawler(3)
 

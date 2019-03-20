@@ -1,11 +1,19 @@
+import os
+
+if os.name == "nt":
+    from pars import *
+    from robots_test import *
+elif os.name == "posix":
+    from parser.pars import *
+    from stickman.robots_test import *
+
 from threading import Thread
 import urllib.request
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from multiprocessing import Queue
-from pars import htmlGetAll
-from robots_test import *
+
 import time
 import requests
 
@@ -53,62 +61,77 @@ class Crawler:
 
     def __init__(self, number_of_workers):
         self.threadnum = number_of_workers
-        self.frontier = ["http://evem.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"]
+        self.frontier = ["https://www.nytimes.com/"]#"http://evem.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"]
         self.q = Queue()
         self.workers = []
         self.waiting_for_processing = []
 
 
     def start_crawling(self):
+        while self.frontier:
+            #create soup elements from sites in the frontier without parallel, because soup doesn't work in threads
+            for url in self.frontier[:self.threadnum]:
+                print("-------------------------------------------------------------------")
+                #set options for headless browsing
+                options = Options()
+                options.headless = True
 
-        #create soup elements from sites in the frontier without parallel, because soup doesn't work in threads
-        for url in self.frontier:
+                #check for robots.txt and parse if exists
+                print(f"Finding and parsing robots.txt for {url}")
+                rh = RobotsTxtHandler(url)
 
-            #set options for headless browsing
-            options = Options()
-            options.headless = True
+                print(f"Sleeping for {rh.crawl_delay} seconds")
+                #sleep for the crawl_delay, default 4s
+                time.sleep(rh.crawl_delay)
 
-            #check for robots.txt and parse if exists
-            rh = RobotsTxtHandler(url)
+                #set up the driver
+                driver = webdriver.Chrome(options=options)
 
-            #sleep for the crawl_delay, default 4s
-            time.sleep(rh.crawl_delay)
+                print(f"Fetching html for {url}")
+                #fetch html
+                driver.get(url)
+                html = driver.page_source
 
-            #set up the driver
-            driver = webdriver.Chrome(options=options)
-
-            #fetch html
-            driver.get(url)
-            html = driver.page_source
-
-            #close driver
-            driver.close()
-
-
-            #store html to soup and save it for multithreaded processing
-            soup = BeautifulSoup(html, "lxml")
-            self.waiting_for_processing.append(soup)
-
-            print(f"Stored BS for: {url}")
-
-        #launch workers
-        for i in range(len(self.waiting_for_processing[:self.threadnum])):
-            t = Thread(target=self.store_processed_to_queue(self.frontier[i], self.waiting_for_processing[i], rh.disallow))
-            t.start()
-            self.workers.append(t)
-        """for unprocessed in self.waiting_for_processing[:self.threadnum]:
-            t = Thread(target=self.store_processed_to_queue(unprocessed), args=(unprocessed))
-            t.start()
-            self.workers.append(t)"""
-
-        #wait for workers to finish
-        for thread in self.workers:
-            thread.join()
+                #close driver
+                driver.close()
 
 
-        #print out the results of crawling on lvl 1
-        while not self.q.empty():
-            print(self.q.get())
+                #store html to soup and save it for multithreaded processing
+                soup = BeautifulSoup(html, "lxml")
+                self.waiting_for_processing.append(soup)
+
+                print(f"Stored BS for: {url}")
+            print("-------------------------------------------------------------------")
+            print(f"Launching {self.threadnum} workers to pars the sites. Currently the size of the frontier is {len(self.frontier)}")
+
+            #launch workers
+            for i in range(len(self.waiting_for_processing[:self.threadnum])):
+                t = Thread(target=self.store_processed_to_queue(self.frontier[i], self.waiting_for_processing[i], rh.disallow))
+                t.start()
+                self.workers.append(t)
+
+            #TODO: Delete this when you are certain that the above for loop works
+            """for unprocessed in self.waiting_for_processing[:self.threadnum]:
+                t = Thread(target=self.store_processed_to_queue(unprocessed), args=(unprocessed))
+                t.start()
+                self.workers.append(t)"""
+
+            #wait for workers to finish
+            for thread in self.workers:
+                thread.join()
+
+            #we have to remove the visited sites from the frontier
+            #we also have to remove the stored bs for sites
+            for i in range(self.threadnum):
+                del self.frontier[0]
+                del self.waiting_for_processing[0]
+
+            #print out the results of crawling on lvl 1
+            #the parser returns (url, set(urls), set(files), set(images))
+            #now we have to empty the q, store stuff to the data base in feed everything to the frontier correctly
+            while not self.q.empty():
+                original_url, links, files, images = self.q.get()
+                self.frontier.extend(links)
 
     def store_processed_to_queue(self, url, soup, robots):
         self.q.put(self.parsePage(url, soup, robots))
@@ -124,7 +147,7 @@ class Crawler:
     def parsePage(self, url, soup, robots):
         urlSet, fileSet, imgSet = htmlGetAll.doPage(url, soup, robots)
         #TODO: check if unique urls, insert files, imgs into db
-        return urlSet, fileSet, imgSet
+        return url, urlSet, fileSet, imgSet
 
     # en process soup, k tud geta pa sparsa - dodal user: jon skoberne
     def getParsePage(self, url):

@@ -118,7 +118,6 @@ class Crawler:
         options.headless = True
 
         # check for robots.txt and parse if exists
-
         rh = RobotsTxtHandler(url)
 
         # sleep for the crawl_delay, default 4s

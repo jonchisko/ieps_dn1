@@ -83,7 +83,7 @@ class htmlGetAll:
         return url
 
     @staticmethod
-    def possiblyExtendUrl(baseUrl, relUrl):
+    def possiblyExtendUrl(baseUrl, relUrl, robots):
         # quick review
         # combine the baseUrl with relativeUrl and parse them
         #joined = urljoin(baseUrl, relUrl)
@@ -99,7 +99,7 @@ class htmlGetAll:
         # check if relUrl is really relative!
         parsedR = urlparse(relUrl)
 
-        if parsedR.scheme == "javascript" or not relUrl:
+        if parsedR.scheme == "javascript" or not relUrl or relUrl in robots:
             return baseUrl
         # if netloc is empty, then we are relative! This is netlocation, for example www.rtvslo.si, or //
         if not parsedR.netloc:
@@ -123,25 +123,31 @@ class htmlGetAll:
                 or url.endswith(".docx") or url.endswith(".ppt") or url.endswith(".pptx"))
 
     @staticmethod
-    def doPage(base_url, htmlSoup):
+    def doPage(base_url, htmlSoup, robots):
         urls = set()
         files = set()
         imgs = set()
+        robots = set(robots)
         base_url = htmlGetAll.urlCleaner(base_url)
         for link in htmlSoup.find_all("a"):
-            url = htmlGetAll.possiblyExtendUrl(base_url, link.get("href"))
+            url = htmlGetAll.possiblyExtendUrl(base_url, link.get("href"), robots)
             # file or url
             if htmlGetAll.isFile(url):
                 files.add(url)
             else:
-                urls.add(url)
+                if "gov.si" in url:
+                    urls.add(url)
         # get javascript urls ??
         for locations in re.findall(htmlGetAll.jsHref, str(htmlSoup), re.MULTILINE):
-            url = htmlGetAll.possiblyExtendUrl(base_url, locations.split("=")[-1].strip(" \"'"))
+            url = htmlGetAll.possiblyExtendUrl(base_url, locations.split("=")[-1].strip(" \"'"), robots)
             if htmlGetAll.isFile(url):
                 files.add(url)
             else:
-                urls.add(url)
+                if "gov.si" in url:
+                    urls.add(url)
+        # remove base_url from urls set
+        if base_url in urls:
+            urls.remove(base_url)
 
         for img in htmlSoup.find_all("img"):
             imgUrl1, imgUrl2 = img.get("data-src"), img.get("src")
@@ -151,9 +157,6 @@ class htmlGetAll:
             if imgUrl2:
                 imgs.add(imgUrl2)
         return urls, files, imgs
-
-
-
 
 
 if __name__ == '__main__':

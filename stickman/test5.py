@@ -4,6 +4,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from multiprocessing import Queue
+from parser.pars import htmlGetAll
+import requests
 
 """def th(bs):
     rezultat = ""
@@ -86,8 +88,8 @@ class Crawler:
         while not self.q.empty():
             print(self.q.get())
 
-    def store_processed_to_queue(self, soup):
-        self.q.put(self.process_soup(soup))
+    def store_processed_to_queue(self, url, soup):
+        self.q.put(self.parsePage(url, soup))
 
 
     def process_soup(self, soup):
@@ -95,6 +97,32 @@ class Crawler:
         for tag in soup.find_all('title'):
             rezultat.append(tag.text)
         return rezultat
+
+    # en process soup, k sam sparsa - dodal user: jon skoberne
+    def parsePage(self, url, soup, robots):
+        urlSet, fileSet, imgSet = htmlGetAll.doPage(url, soup, robots)
+        #TODO: check if unique urls, insert files, imgs into db
+        return urlSet, fileSet, imgSet
+
+    # en process soup, k tud geta pa sparsa - dodal user: jon skoberne
+    def getParsePage(self, url):
+        #TODO:everything
+        # urllib request apparently works in threads, so this is for threads
+        response = requests.get(url, verify=False, allow_redirects=True, timeout=50)
+        soup = BeautifulSoup(response.text, "lxml")
+        robots = []
+        urlSet, fileSet, imgSet = htmlGetAll.doPage(url, soup, robots)
+        # TODO: status codes, check if unique urls, insert files, imgs into db
+
+    # function checks if page needs selenium
+    def checkPage(self, url):
+        # get http head
+        # head = requests.head(url)
+        pass
+
+    # get page
+    def getPage(self, url):
+        pass
 
 
 crw = Crawler(3)

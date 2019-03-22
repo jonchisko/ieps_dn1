@@ -11,12 +11,14 @@ import time
 #ko bos dajal v bazo klices to string da bos dal kot 1 string vse skupi
 class Site:
 
-    def __init__(self, allow, disallow, sitemap, delay, site_id):
+    def __init__(self, url, allow, disallow, sitemap, delay):
+        self.url = url
+        self.domain = urlparse(url).netloc
         self.allow = allow
         self.disallow = disallow
         self.sitemap = sitemap
         self.delay = delay
-        self.site_id = site_id
+        self.site_id = None
 
     def set_site_id(self, site_id):
         self.site_id = site_id
@@ -42,20 +44,26 @@ class URL:
     def __init__(self, url, allow, disallow, delay, site_id):#, page_id, html):
         self.url = url
         self.domain = urlparse(url).netloc
-        self.acces_time = time.time()
+        self.time = None
         self.allow = allow
         self.disallow = disallow
         self.delay = delay
         self.site_id = site_id
         self.page_id = None
+        self.html_status_code = None
         self.html = None
 
 
     def set_html(self, html):
         self.html = html
 
+    def set_html_status_code(self, code):
+        self.html_status_code = code
+
     def set_page_id(self, page_id):
         self.page_id = page_id
 
+    def set_time(self, time):
+        self.time = time
 if __name__ == "__main__":
     url = URL("http://www.e-prostor.gov.si/dostop-do-podatkov/dostop-do-podatkov/")

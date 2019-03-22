@@ -20,9 +20,10 @@ import requests
 
 class Crawler:
 
-    def __init__(self, number_of_workers):
+    def __init__(self, seeds, number_of_workers):
         self.threadnum = number_of_workers
-        self.frontier = ["http://evem.gov.si", "http://e-uprava.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"]
+        self.seeds = seeds
+        self.frontier = []
         self.q = Queue()
         self.workers = []
         self.visited = set()
@@ -31,13 +32,27 @@ class Crawler:
     def check_for_existing_site(self, url):
         return urlparse(url).netloc in self.sites
 
+
+    #This functions has to be called before we start crawling. It takes the seed urls and parses them and inserts them into the frontier
+
+    def setup_crawler(self):
+        print("Setting up the crawler by adding seeds to the frontier.")
+
+        for url in self.seeds:
+
+            # narest se class url za obdelavo
+            url_class_instance = self.domain_checking(url)
+
+            self.frontier.append(url_class_instance)
+
     def start_crawling(self):
         iii = 5
         while iii > 0:
 
             #launch workers
-            for url in self.frontier[:self.threadnum]:
-                t = Thread(target=self.store_processed_to_queue, args=(url,))
+            workers = self.threadnum if len(self.frontier) >= self.threadnum else len(self.frontier)
+            for url_class_instance in self.frontier[:workers]:
+                t = Thread(target=self.store_processed_to_queue, args=(url_class_instance,))
                 t.start()
                 self.workers.append(t)
 
@@ -52,20 +67,51 @@ class Crawler:
                 del self.frontier[0]
 
 
-            print("Pobiram rezultat")
+            print("            Pobiram rezultat               ")
             #print out the results of crawling on lvl 1
             #the parser returns (url, set(urls), set(files), set(images))
             #now we have to empty the q, store stuff to the data base in feed everything to the frontier correctly
             while not self.q.empty():
 
+                #tukej updejtas original_url pa addas otroke
                 original_url, links, files, images = self.q.get()
 
                 print(f"Adding links from {original_url.url} to frontier:")
+
+                ##########################################
+                #treba je pohendlat se zacetek!!!!!!!!!!!#
+                ##########################################
+
+                #okej zdej vse radi. zdej rabmo pa update pa dodat
+                #TODO: v bazi je treba updejtat podatke od original_url
+                    #- UpdateDataInDBFor(original_url.page_id)
+                    #- Spremenit mores polja:
+                        #- page_type_code FRONTIER -> HTML
+                        #- html_content Null -> original_url.html
+                        #- html_status_code  Null -> original_url.html_status_code
+                #zdej je zrihtan original html in je to to
+
+
                 for link in links:
+
+                    #preverja ce smo ze obiskali tocno tak url
+                    #ce se nismo ga uzamemo, instanciramo url_class_instance in ga dodamo v bazo in na frontier
                     if link not in self.visited:
                         self.visited.add(link)
                         print(f"   - added: {link}")
-                        self.frontier.append(link)
+
+                        #instanciran
+                        url_class_instance = self.domain_checking(link)
+                        #dodan na frontier
+                        self.frontier.append(url_class_instance)
+
+                        #TODO: v bazo je treba dodat url_class_instace ampak brez dolocenih polji, ker jih bomo dodali potem ko bo evalviran iz frontierja
+                            #- site_it dobis iz url_class_instance.site_id
+                            #- page_type_code je FRONTIER
+                            #- url je url_class_instance.url
+                            #- html_content je Null
+                            #- html_status_code je Null
+                            #- accessed_time je Null
 
             iii -= 1
     """
@@ -92,35 +138,47 @@ class URL:
         self.html = None
     
     """
-    def store_processed_to_queue(self, url):
 
-        # set options for headless browsing
-        options = Options()
-        options.headless = True
+    #Preveri ce smo domeno ze shranili
+    #Ce je nismo jo shrani lokalno in v bazo doda site
+    def domain_checking(self, url):
 
         current_domain = urlparse(url).netloc
 
-        #ce mamo ze site za ta page ne rabimo iskat robotsov itd
-        #samo nrdimo instanco page-a
+        # ce mamo ze site za ta page ne rabimo iskat robotsov itd
+        # samo nrdimo instanco page-a
         if self.check_for_existing_site(url):
-            url_class_instance = URL(url, self.sites[current_domain].allow, self.sites[current_domain].disallow, self.sites[current_domain].delay, self.sites[current_domain].site_id)
-            print(f"Working for {url}: \n        We already know this domain, we have to avoid {len(self.sites[current_domain].disallow)} urls\n        We can visit {len(self.sites[current_domain].allow)} sites\n        We have to obey the crawl delay which is {self.sites[current_domain].delay}\n")
+            url_class_instance = URL(url, self.sites[current_domain].allow, self.sites[current_domain].disallow,
+                                     self.sites[current_domain].delay, self.sites[current_domain].site_id)
         else:
-            #v tem primeru pa se nimamo site in je treba narest najprej treba dobit robotse za domeno strani
+            # v tem primeru pa se nimamo site in je treba narest najprej treba dobit robotse za domeno strani
             rh = RobotsTxtHandler("http://" + current_domain)
             allow, disallow, sitemap = rh.allow, rh.disallow, rh.sitemap
 
-            #instancirat domeno strani
-            site = Site(allow, disallow, sitemap, rh.crawl_delay, None)
+            # instancirat domeno strani
+            site = Site(url, allow, disallow, sitemap, rh.crawl_delay)
 
-            #dodat site v vse site
+            #TODO: tukej dodej v bazo ta site. Rabis:
+                #- domain kar dobis z site.domain
+                #- robots kar dobis z allows, disallows, sitemap = site.get_robots_string()
+
+            #TODO: zdej mores se eno poizvedbo narest da dobis vn site id
+                #sepravi a = GetSiteIDFromDB
+                #site.set_site_id(a)
+
+            # dodas site v vse site
             self.sites[current_domain] = site
 
-            #narest se class url za obdelavo
-            url_class_instance = URL(url, self.sites[current_domain].allow, self.sites[current_domain].disallow, self.sites[current_domain].delay, self.sites[current_domain].site_id)
-            print(f"Working for {url}: \n        This is the first time visiting this domain, we have to avoid {len(self.sites[current_domain].disallow)} urls\n        We can visit {len(self.sites[current_domain].allow)} sites\n        We have to obey the crawl delay which is {self.sites[current_domain].delay}\n")
+            # narest se class url za obdelavo
+            url_class_instance = URL(url, site.allow, site.disallow, site.delay, site.site_id)
 
+        return url_class_instance
 
+    def store_processed_to_queue(self, url_class_instance):
+        #print(f"Working for {url_class_instance.url}\n   Delay: {url_class_instance.delay}\n   Allow: {len(url_class_instance.allow)}\n   Disllow: {len(url_class_instance.disallow)}\n")
+        # set options for headless browsing
+        options = Options()
+        options.headless = True
 
         # sleep for the crawl_delay, default 4s
         time.sleep(url_class_instance.delay)
@@ -128,23 +186,29 @@ class URL:
         # set up the driver
         driver = webdriver.Chrome(options=options)
 
+        #get the status code
+        r = requests.get(url_class_instance.url)
+        url_class_instance.set_html_status_code(r.status_code)
+
         # fetch html
-        driver.get(url)
+        driver.get(url_class_instance.url)
         html = driver.page_source
         url_class_instance.set_html(html)
+        url_class_instance.set_time(time.time())
+
 
         # close driver
         driver.close()
 
         # add url to visited
-        self.visited.add(url)
+        self.visited.add(url_class_instance.url)
 
         # store html to soup and save it for multithreaded processing
         soup = BeautifulSoup(html, "lxml")
 
         self.q.put(self.parsePage(url_class_instance, soup))
 
-        print(f"Done working for {url}")
+        print(f"Done working for {url_class_instance.url}")
 
     def process_soup(self, soup):
         rezultat = []
@@ -181,7 +245,7 @@ class URL:
         pass
 
 
-crw = Crawler(4)
-
+crw = Crawler(["http://evem.gov.si", "http://e-uprava.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"], 4)
+crw.setup_crawler()
 crw.start_crawling()
 

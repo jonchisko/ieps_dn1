@@ -47,23 +47,30 @@ class RobotsTxtHandler:
     def __init__(self, link):
         #add /robots.txt to link if needed
         self.link = link + "/robots.txt" if "robots.txt" not in link else link
-
+        self.crawl_delay = 4
+        self.allow = []
+        self.disallow = []
+        self.sitemap = []
         #fetch the page
-        self.response = requests.get(self.link)
-
-        self.robots_exists = False
-
-
-        #if the page exist and is accessible then parse the file and set the class attributes accordingly
         try:
-            self.response.raise_for_status()
-            self.sitemap = parse_robots_sitemap(self.response.text)
-            self.robots_exists = True
+            self.response = requests.get(self.link)
+            # if the page exist and is accessible then parse the file and set the class attributes accordingly
 
-        #if raise for status triggers and exception assume that there is no robots.txt file and set attributes to default values
-        except Exception as e:
-            #print(f"Exception was triggered while fetching: {e}")
+            try:
+                self.response.raise_for_status()
+                self.sitemap = parse_robots_sitemap(self.response.text)
+                self.robots_exists = True
+
+            # if raise for status triggers and exception assume that there is no robots.txt file and set attributes to default values
+            except Exception as e:
+                # print(f"Exception was triggered while fetching: {e}")
+                self.sitemap, self.allow, self.disallow, self.crawl_delay = [], [], [], 4
+                self.robots_exists = False
+        except:
             self.sitemap, self.allow, self.disallow, self.crawl_delay = [], [], [], 4
+            self.robots_exists = False
+
+
 
         #if the self.robots_exists flag has been set then the try clause didn't trigger an exception and the sitemap is set
         #we now have to get the delay and allow and disallow

@@ -17,6 +17,7 @@ from URLclasses import URL, Site
 from urllib.parse import urlparse
 import time
 import requests
+from database import Database
 
 class Crawler:
 
@@ -28,22 +29,43 @@ class Crawler:
         self.workers = []
         self.visited = set()
         self.sites = dict()
+        self.db = Database()
 
     def check_for_existing_site(self, url):
+        # urlparese(url).netloc vrne domeno
         return urlparse(url).netloc in self.sites
 
 
     #This functions has to be called before we start crawling. It takes the seed urls and parses them and inserts them into the frontier
-
     def setup_crawler(self):
         print("Setting up the crawler by adding seeds to the frontier.")
 
-        for url in self.seeds:
+        db_forntier = self.db.getFrontier()
 
-            # narest se class url za obdelavo
-            url_class_instance = self.domain_checking(url)
+        # If the database froniter is empty, add the seeds to it and the RAM froniter
+        if len(db_forntier) == 0:
+            for url in self.seeds:
+                # Make a class instance from string url (adds domain info, such as robots.txt and sitemap)
+                url_class_instance = self.domain_checking(url)
+                self.frontier.append(url_class_instance)
 
-            self.frontier.append(url_class_instance)
+        else:
+            for page in db_forntier:
+                p1 = page[4].find('Disallow: ')
+                p2 = page[4].find('Delay: ')
+
+                allows = page[4][:p1]
+                disallows = page[4][p1:p2]
+                delay = int(page[4][p2:].replace('Delay: ', ''))
+
+                url_class_instance = URL(page[2], allows, disallows, delay, page[1])
+                url_class_instance.set_page_id(page[0])
+
+                site = Site(page[3], allows, disallows, page[5], delay)
+                site.set_site_id(page[1])
+
+                self.sites[page[3]] = site
+                self.frontier.append(url_class_instance)
 
     def start_crawling(self):
         iii = 5
@@ -116,6 +138,8 @@ class Crawler:
                             #- accessed_time je Null
 
             iii -= 1
+
+
     """
     class Site:
 
@@ -160,19 +184,21 @@ class URL:
             # instancirat domeno strani
             site = Site(url, allow, disallow, sitemap, rh.crawl_delay)
 
-            #TODO: tukej dodej v bazo ta site. Rabis:
-                #- domain kar dobis z site.domain
-                #- robots kar dobis z allows, disallows, sitemap = site.get_robots_string()
+            allows, disallows, sitemap = site.get_robots_strings()
+            self.db.insert('site', {'domain':[site.domain],
+                                    'robots_content':[allows + disallows + 'Delay: ' + str(site.delay)],
+                                    'sitemap_content': [sitemap]})
 
-            #TODO: zdej mores se eno poizvedbo narest da dobis vn site id
-                #sepravi a = GetSiteIDFromDB
-                #site.set_site_id(a)
 
-            # dodas site v vse site
+            # siteID is only created after inserted
+            siteID = self.db.get('site', "WHERE domain = '" + site.domain + "'")[0][0]
+            site.set_site_id(siteID)
             self.sites[current_domain] = site
 
-            # narest se class url za obdelavo
+            self.db.insert('page', {'site_id':[siteID], 'page_type_code':['FRONTIER'], 'url':[url]})
+            pageID = self.db.get('page', "WHERE url = '" + url + "'")[0][0]
             url_class_instance = URL(url, site.allow, site.disallow, site.delay, site.site_id)
+            url_class_instance.set_page_id(pageID)
 
         return url_class_instance
 

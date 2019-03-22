@@ -63,14 +63,30 @@ class Database:
 
         return result
 
+    def getFrontier(self):
+        db = psql.connect(**self.config)
+        cursor = db.cursor()
 
+        query = 'SELECT a.id, site_id, url, domain, robots_content, sitemap_content FROM crawldb.page AS a INNER JOIN crawldb.site AS b ON a.site_id = b.id WHERE page_type_code = \'FRONTIER\';'
+
+        cursor.execute(query)
+
+        result = []
+        for row in cursor:
+            result.append(row)
+
+        cursor.close()
+        db.close()
+
+        return result
 
 if __name__ == '__main__':
     # Init
     db = Database()
-
+    print(len(db.getFrontier()))
+    print(db.get('site', 'WHERE domain = '+ "'www.gov.si'")[0][0])
+    '''
     # Prepare and insert data
-    # TODO: Now, insert() inserts all the data in a single query. If there is a problem with a single row (duplicate on PK for instance) the whole query fails. Instead, insert one row at a time (slower but safer).
     data = {'id': [1, 2, 3],
             'domain': ['www.gov.si', 'www.najdi.si', 'www.chupacabra.it'],
             'robots_content': [None, 'You may do everything', None],
@@ -83,3 +99,5 @@ if __name__ == '__main__':
 
     for row in results:
         print(row)
+    
+    '''

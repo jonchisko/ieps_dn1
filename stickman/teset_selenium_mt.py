@@ -63,7 +63,7 @@ class Crawler:
             print(f"The length of the frontier is {len(self.frontier)}")
             #we have to remove the visited sites from the frontier
             #we also have to remove the stored bs for sites
-            for i in range(self.threadnum):
+            for i in range(workers):
                 del self.frontier[0]
 
 
@@ -97,6 +97,8 @@ class Crawler:
                     #preverja ce smo ze obiskali tocno tak url
                     #ce se nismo ga uzamemo, instanciramo url_class_instance in ga dodamo v bazo in na frontier
                     if link not in self.visited:
+
+                        #TODO: Content check
                         self.visited.add(link)
                         print(f"   - added: {link}")
 
@@ -187,8 +189,11 @@ class URL:
         driver = webdriver.Chrome(options=options)
 
         #get the status code
-        r = requests.get(url_class_instance.url)
-        url_class_instance.set_html_status_code(r.status_code)
+        try:
+            r = requests.get(url_class_instance.url)
+            url_class_instance.set_html_status_code(int(r.status_code))
+        except:
+            url_class_instance.set_html_status_code(404)
 
         # fetch html
         driver.get(url_class_instance.url)

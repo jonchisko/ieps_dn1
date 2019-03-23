@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 import time
 import requests
 from database import Database
+import getFile
 
 class Crawler:
 
@@ -30,6 +31,7 @@ class Crawler:
         self.visited = set()
         self.sites = dict()
         self.db = Database()
+        self.maxPageID, self.maxSiteID = self.db.getMaxIDs()
 
     def check_for_existing_site(self, url):
         # urlparese(url).netloc vrne domeno
@@ -40,7 +42,8 @@ class Crawler:
     def setup_crawler(self):
         print("Setting up the crawler by adding seeds to the frontier.")
 
-        db_forntier = self.db.getFrontier()
+        self.visited = self.db.getVisited()
+        db_forntier = self.db.getFrontier(self.threadnum)
 
         # If the database froniter is empty, add the seeds to it and the RAM froniter
         if len(db_forntier) == 0:
@@ -48,6 +51,7 @@ class Crawler:
                 # Make a class instance from string url (adds domain info, such as robots.txt and sitemap)
                 url_class_instance = self.domain_checking(url)
                 self.frontier.append(url_class_instance)
+                self.visited.add(url)
 
         else:
             for page in db_forntier:
@@ -58,11 +62,8 @@ class Crawler:
                 disallows = page[4][p1:p2]
                 delay = int(page[4][p2:].replace('Delay: ', ''))
 
-                url_class_instance = URL(page[2], allows, disallows, delay, page[1])
-                url_class_instance.set_page_id(page[0])
-
-                site = Site(page[3], allows, disallows, page[5], delay)
-                site.set_site_id(page[1])
+                url_class_instance = URL(page[2], allows, disallows, delay, page[1], page[0])
+                site = Site(page[3], allows, disallows, page[5], delay, page[1])
 
                 self.sites[page[3]] = site
                 self.frontier.append(url_class_instance)
@@ -83,8 +84,7 @@ class Crawler:
                 thread.join()
 
             print(f"The length of the frontier is {len(self.frontier)}")
-            #we have to remove the visited sites from the frontier
-            #we also have to remove the stored bs for sites
+            # Remove visited sites from the frontier
             for i in range(workers):
                 del self.frontier[0]
 
@@ -92,50 +92,81 @@ class Crawler:
             print("            Pobiram rezultat               ")
             #print out the results of crawling on lvl 1
             #the parser returns (url, set(urls), set(files), set(images))
-            #now we have to empty the q, store stuff to the data base in feed everything to the frontier correctly
+            #now we have to empty the q, store stuff to the database in feed everything to the frontier correctly
             while not self.q.empty():
-
-                #tukej updejtas original_url pa addas otroke
                 original_url, links, files, images = self.q.get()
+
+
+                self.db.updateFroniter(original_url.page_id, original_url.html, original_url.html_status_code,
+                                           original_url.time)
+
 
                 print(f"Adding links from {original_url.url} to frontier:")
 
-                ##########################################
-                #treba je pohendlat se zacetek!!!!!!!!!!!#
-                ##########################################
-
-                #okej zdej vse radi. zdej rabmo pa update pa dodat
-                #TODO: v bazi je treba updejtat podatke od original_url
-                    #- UpdateDataInDBFor(original_url.page_id)
-                    #- Spremenit mores polja:
-                        #- page_type_code FRONTIER -> HTML
-                        #- html_content Null -> original_url.html
-                        #- html_status_code  Null -> original_url.html_status_code
-                #zdej je zrihtan original html in je to to
-
-
+                fromPage = []
+                toPage = []
                 for link in links:
-
                     #preverja ce smo ze obiskali tocno tak url
                     #ce se nismo ga uzamemo, instanciramo url_class_instance in ga dodamo v bazo in na frontier
-                    if link not in self.visited:
 
-                        #TODO: Content check
+                    if link not in self.visited:
+                        #TODO: Content check, samo to lahko naredis sele ko ze imas content, torej v obdelavi original _urlja
+
                         self.visited.add(link)
                         print(f"   - added: {link}")
 
-                        #instanciran
+                        #instanciran + doda page in site v DB + doda site v RAM
                         url_class_instance = self.domain_checking(link)
                         #dodan na frontier
                         self.frontier.append(url_class_instance)
 
-                        #TODO: v bazo je treba dodat url_class_instace ampak brez dolocenih polji, ker jih bomo dodali potem ko bo evalviran iz frontierja
-                            #- site_it dobis iz url_class_instance.site_id
-                            #- page_type_code je FRONTIER
-                            #- url je url_class_instance.url
-                            #- html_content je Null
-                            #- html_status_code je Null
-                            #- accessed_time je Null
+                        # Record all the links
+                        fromPage.append(original_url.page_id)
+                        toPage.append(url_class_instance.page_id)
+
+                # Write links to DB
+                if len(fromPage) > 0:
+                    self.db.insert('link', {'from_page':fromPage, 'to_page':toPage})
+
+
+                for image in images:
+                    if image not in self.visited:
+                        response = getFile.GetFileFromURL.get_file_from_url(image)
+
+                        if not response:
+                            continue
+
+                        fileName, imgType, statusCode = response
+
+                        self.visited.add(image)
+                        self.addFileToDB(image, 'img', fileName, imgType, statusCode)
+                        getFile.GetFileFromURL.delete_file_from_disc(fileName)
+                        print(f"   - image: {fileName}")
+
+                for file in files:
+                    type = file.split('.')[-1]
+
+                    if type not in ['pdf', 'doc', 'docx', 'ppt', 'pptx']:
+                        continue
+
+                    if file not in self.visited:
+                        response = getFile.GetFileFromURL.get_file_from_url(file)
+
+                        if not response:
+                            continue
+
+                        fileName, fileType, statusCode = response
+
+                        self.visited.add(file)
+                        self.addFileToDB(file, 'doc', fileName, fileType, statusCode)
+                        getFile.GetFileFromURL.delete_file_from_disc(fileName)
+                        print(f"   - file: {fileName}")
+
+
+
+
+
+
 
             iii -= 1
 
@@ -165,45 +196,80 @@ class URL:
     
     """
 
+    def addFileToDB(self, url, type, fileName, fileType, statusCode):
+        domain = urlparse(url).netloc
+        self.maxPageID += 1
+
+        if self.check_for_existing_site(url):
+            siteID = self.sites[domain].site_id
+
+        else:
+            rh = RobotsTxtHandler("http://" + domain)
+            allow, disallow, sitemap = rh.allow, rh.disallow, rh.sitemap
+            self.maxSiteID += 1
+            site = Site(url, allow, disallow, sitemap, rh.crawl_delay, self.maxSiteID)
+            allows, disallows, sitemap = site.get_robots_strings()
+            self.db.insert('site', {'id': [self.maxSiteID],
+                                    'domain': [site.domain],
+                                    'robots_content': [allows + disallows + 'Delay: ' + str(site.delay)],
+                                    'sitemap_content': [sitemap]})
+
+            self.sites[domain] = site
+            siteID = site.site_id
+
+        if type == 'img':
+            self.db.insertImage(url, siteID, self.maxPageID, fileName, fileType, statusCode)
+        elif type == 'doc':
+            self.db.insertFile(url, siteID, self.maxPageID, fileName, fileType, statusCode)
+
+
     #Preveri ce smo domeno ze shranili
     #Ce je nismo jo shrani lokalno in v bazo doda site
     def domain_checking(self, url):
 
         current_domain = urlparse(url).netloc
+        self.maxPageID += 1
 
         # ce mamo ze site za ta page ne rabimo iskat robotsov itd
         # samo nrdimo instanco page-a
         if self.check_for_existing_site(url):
+            siteID = self.sites[current_domain].site_id
+
             url_class_instance = URL(url, self.sites[current_domain].allow, self.sites[current_domain].disallow,
-                                     self.sites[current_domain].delay, self.sites[current_domain].site_id)
+                                     self.sites[current_domain].delay, siteID, self.maxPageID)
+
+            self.db.insert('page', {'id': [self.maxPageID],
+                                    'site_id': [siteID],
+                                    'page_type_code': ['FRONTIER'],
+                                    'url': [url]})
+
         else:
             # v tem primeru pa se nimamo site in je treba narest najprej treba dobit robotse za domeno strani
             rh = RobotsTxtHandler("http://" + current_domain)
             allow, disallow, sitemap = rh.allow, rh.disallow, rh.sitemap
 
             # instancirat domeno strani
-            site = Site(url, allow, disallow, sitemap, rh.crawl_delay)
+            self.maxSiteID += 1
+            site = Site(url, allow, disallow, sitemap, rh.crawl_delay, self.maxSiteID)
 
             allows, disallows, sitemap = site.get_robots_strings()
-            self.db.insert('site', {'domain':[site.domain],
+            self.db.insert('site', {'id': [self.maxSiteID],
+                                    'domain':[site.domain],
                                     'robots_content':[allows + disallows + 'Delay: ' + str(site.delay)],
                                     'sitemap_content': [sitemap]})
 
-
-            # siteID is only created after inserted
-            siteID = self.db.get('site', "WHERE domain = '" + site.domain + "'")[0][0]
-            site.set_site_id(siteID)
             self.sites[current_domain] = site
 
-            self.db.insert('page', {'site_id':[siteID], 'page_type_code':['FRONTIER'], 'url':[url]})
-            pageID = self.db.get('page', "WHERE url = '" + url + "'")[0][0]
-            url_class_instance = URL(url, site.allow, site.disallow, site.delay, site.site_id)
-            url_class_instance.set_page_id(pageID)
+            self.db.insert('page', {'id': [self.maxPageID],
+                                    'site_id':[self.maxSiteID],
+                                    'page_type_code':['FRONTIER'],
+                                    'url':[url]})
+
+            url_class_instance = URL(url, site.allow, site.disallow, site.delay, site.site_id, self.maxPageID)
 
         return url_class_instance
 
     def store_processed_to_queue(self, url_class_instance):
-        #print(f"Working for {url_class_instance.url}\n   Delay: {url_class_instance.delay}\n   Allow: {len(url_class_instance.allow)}\n   Disllow: {len(url_class_instance.disallow)}\n")
         # set options for headless browsing
         options = Options()
         options.headless = True
@@ -225,7 +291,7 @@ class URL:
         driver.get(url_class_instance.url)
         html = driver.page_source
         url_class_instance.set_html(html)
-        url_class_instance.set_time(time.time())
+        url_class_instance.set_time(int(time.time()))
 
 
         # close driver
@@ -274,7 +340,6 @@ class URL:
     # get page
     def getPage(self, url):
         pass
-
 
 crw = Crawler(["http://evem.gov.si", "http://e-uprava.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"], 4)
 crw.setup_crawler()

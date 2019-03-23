@@ -61,10 +61,11 @@ class Crawler:
 
     def __init__(self, number_of_workers):
         self.threadnum = number_of_workers
-        self.frontier = ["https://www.nytimes.com/"]#"http://evem.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"]
+        self.frontier = ["http://evem.gov.si", "http://e-uprava.gov.si", "http://podatki.gov.si", "http://e-prostor.gov.si"]
         self.q = Queue()
         self.workers = []
         self.waiting_for_processing = []
+        self.visited = set()
 
 
     def start_crawling(self):
@@ -95,6 +96,8 @@ class Crawler:
                 #close driver
                 driver.close()
 
+                #add url to visited
+                self.visited.add(url)
 
                 #store html to soup and save it for multithreaded processing
                 soup = BeautifulSoup(html, "lxml")
@@ -122,7 +125,7 @@ class Crawler:
 
             #we have to remove the visited sites from the frontier
             #we also have to remove the stored bs for sites
-            for i in range(self.threadnum):
+            for i in range(len(self.waiting_for_processing)):
                 del self.frontier[0]
                 del self.waiting_for_processing[0]
 
@@ -131,7 +134,10 @@ class Crawler:
             #now we have to empty the q, store stuff to the data base in feed everything to the frontier correctly
             while not self.q.empty():
                 original_url, links, files, images = self.q.get()
-                self.frontier.extend(links)
+                #self.frontier.extend(links)
+                for link in links:
+                    if link not in self.visited:
+                        self.frontier.append(link)
 
     def store_processed_to_queue(self, url, soup, robots):
         self.q.put(self.parsePage(url, soup, robots))
@@ -160,6 +166,6 @@ class Crawler:
         # TODO: status codes, check if unique urls, insert files, imgs into db
 
 
-crw = Crawler(3)
+crw = Crawler(4)
 
 crw.start_crawling()

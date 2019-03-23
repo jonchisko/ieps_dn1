@@ -159,19 +159,6 @@ class Crawler:
         urlSet, fileSet, imgSet = htmlGetAll.doPage(url, soup, robots)
         # TODO: status codes, check if unique urls, insert files, imgs into db
 
-    # function checks if page needs selenium
-    def getPage(self, url):
-        # get http head
-        # head = requests.head(url)
-        pass
-
-    # get page with requests
-    def getPageR(self, url):
-        pass
-
-    # get page with selenium
-    def getPageS(self, url):
-        pass
 
 crw = Crawler(3)
 

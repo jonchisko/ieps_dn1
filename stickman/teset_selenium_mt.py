@@ -19,6 +19,7 @@ import time
 import requests
 from database import Database
 import getFile
+import hashlib
 
 class Crawler:
 
@@ -29,6 +30,7 @@ class Crawler:
         self.q = Queue()
         self.workers = []
         self.visited = set()
+        self.content = dict()
         self.sites = dict()
         self.db = Database()
         self.maxPageID, self.maxSiteID = self.db.getMaxIDs()
@@ -43,6 +45,7 @@ class Crawler:
         print("Setting up the crawler by adding seeds to the frontier.")
 
         self.visited = self.db.getVisited()
+        self.content = self.db.getContentHash()
         db_forntier = self.db.getFrontier(self.threadnum)
 
         # If the database froniter is empty, add the seeds to it and the RAM froniter
@@ -96,9 +99,14 @@ class Crawler:
             while not self.q.empty():
                 original_url, links, files, images = self.q.get()
 
+                hash = hashlib.md5(original_url.html.encode('utf-8')).hexdigest()
+                duplicate = hash in self.content
 
-                self.db.updateFroniter(original_url.page_id, original_url.html, original_url.html_status_code,
-                                           original_url.time)
+                if not duplicate:
+                    self.content[hash] = original_url.page_id
+
+                self.db.updateFroniter(original_url.page_id, original_url.html, hash, original_url.html_status_code,
+                                           original_url.time, duplicate)
 
 
                 print(f"Adding links from {original_url.url} to frontier:")

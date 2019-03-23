@@ -83,18 +83,22 @@ class Database:
 
         return result
 
-    def updateFroniter(self, pageID, html, statusCode, time):
+    def updateFroniter(self, pageID, html, hash, statusCode, time, duplicate):
         db = psql.connect(**self.config)
         cursor = db.cursor()
 
+        code = 'DUPLICATE' if duplicate else 'HTML'
+        html = 'NULL' if duplicate else html
+
         query = 'UPDATE crawldb.page ' \
-                'SET page_type_code = \'HTML\', ' \
+                'SET page_type_code = %s, ' \
                 '   html_content = %s, ' \
                 '   http_status_code = ' + str(statusCode) + ', ' \
+                '   content_hash = %s, ' \
                 '   accessed_time = \'' + datetime.utcfromtimestamp(time).strftime('%Y-%m-%d %H:%M:%S') + '\' ' \
                 'WHERE id = ' + str(pageID) + ';'
 
-        cursor.execute(query, [html])
+        cursor.execute(query, [code, html, hash])
         db.commit()
 
         cursor.close()
@@ -116,6 +120,23 @@ class Database:
         db.close()
 
         return set(seen)
+
+    def getContentHash(self):
+        db = psql.connect(**self.config)
+        cursor = db.cursor()
+
+        seen = {}
+
+        query = 'SELECT id, content_hash FROM crawldb.page WHERE page_type_code = \'HTML\';'
+        cursor.execute(query)
+
+        for url in cursor:
+            seen[url[1]] = url[0]
+
+        cursor.close()
+        db.close()
+
+        return seen
 
     def getMaxIDs(self):
         db = psql.connect(**self.config)

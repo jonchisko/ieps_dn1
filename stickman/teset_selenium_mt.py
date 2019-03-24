@@ -72,8 +72,7 @@ class Crawler:
                 self.frontier.append(url_class_instance)
 
     def start_crawling(self):
-        iii = 5
-        while iii > 0:
+        while self.frontier:
 
             #launch workers
             workers = self.threadnum if len(self.frontier) >= self.threadnum else len(self.frontier)
@@ -169,14 +168,6 @@ class Crawler:
                         self.addFileToDB(file, 'doc', fileName, fileType, statusCode)
                         getFile.GetFileFromURL.delete_file_from_disc(fileName)
                         print(f"   - file: {fileName}")
-
-
-
-
-
-
-
-            iii -= 1
 
 
     """
@@ -294,6 +285,10 @@ class URL:
             url_class_instance.set_html_status_code(int(r.status_code))
         except:
             url_class_instance.set_html_status_code(404)
+
+        if url_class_instance.html_status_code != 200:
+            print("Error loading page, not working with it")
+            return
 
         # fetch html
         driver.get(url_class_instance.url)

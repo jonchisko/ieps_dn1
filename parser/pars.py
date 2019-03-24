@@ -98,7 +98,6 @@ class htmlGetAll:
         # actual code
         # check if relUrl is really relative!
         parsedR = urlparse(relUrl)
-
         if parsedR.scheme == "javascript" or not relUrl or relUrl in robots:
             return baseUrl
         # if netloc is empty, then we are relative! This is netlocation, for example www.rtvslo.si, or //
@@ -128,6 +127,10 @@ class htmlGetAll:
         files = set()
         imgs = set()
         robots = set(robots)
+
+        trueBase = htmlSoup.find("base")
+        if trueBase:
+            base_url = trueBase.get("href")
         base_url = htmlGetAll.urlCleaner(base_url)
         for link in htmlSoup.find_all("a"):
             url = htmlGetAll.possiblyExtendUrl(base_url, link.get("href"), robots)
@@ -231,3 +234,14 @@ if __name__ == '__main__':
     # close webpage
     driver.close()
     # tests end
+
+
+
+    # add tests
+    print("######gov tests######")
+    driver = webdriver.Firefox(options=options)
+    #driver.get("http://evem.gov.si/evem/drzavljani/zacetna.evem")
+    driver.get("http://evem.gov.si/info/podrocja/sektor/12020/prikaziSektor/")
+    html = BeautifulSoup(driver.page_source, "lxml")
+    for e in htmlGetAll.doPage(driver.current_url, html, robots):
+        print(e)

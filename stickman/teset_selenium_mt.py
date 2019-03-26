@@ -46,7 +46,7 @@ class Crawler:
 
         self.visited = self.db.getVisited()
         self.content = self.db.getContentHash()
-        db_forntier = self.db.getFrontier(self.threadnum)
+        db_forntier = self.db.getFrontier()
 
         # If the database froniter is empty, add the seeds to it and the RAM froniter
         if len(db_forntier) == 0:
@@ -216,10 +216,14 @@ class URL:
             self.sites[domain] = site
             siteID = site.site_id
 
-        if type == 'img':
-            self.db.insertImage(url, siteID, self.maxPageID, fileName, fileType, statusCode)
-        elif type == 'doc':
-            self.db.insertFile(url, siteID, self.maxPageID, fileName, fileType, statusCode)
+        try:
+            if type == 'img':
+                self.db.insertImage(url, siteID, self.maxPageID, fileName, fileType, statusCode)
+            elif type == 'doc':
+                self.db.insertFile(url, siteID, self.maxPageID, fileName, fileType, statusCode)
+        except:
+            # Vcasih pac ne zloada fajla, in pol nimas kej
+            pass
 
 
     #Preveri ce smo domeno ze shranili
@@ -287,6 +291,7 @@ class URL:
             url_class_instance.set_html_status_code(404)
 
         if url_class_instance.html_status_code != 200:
+            self.db.updateFroniter(url_class_instance.page_id, None, None, url_class_instance.html_status_code, int(time.time()), False)
             print("Error loading page, not working with it")
             return
 

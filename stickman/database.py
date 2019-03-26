@@ -63,14 +63,13 @@ class Database:
 
         return result
 
-    def getFrontier(self, N):
+    def getFrontier(self):
         db = psql.connect(**self.config)
         cursor = db.cursor()
 
         query = 'SELECT a.id, site_id, url, domain, robots_content, sitemap_content ' \
                 'FROM crawldb.page AS a INNER JOIN crawldb.site AS b ON a.site_id = b.id ' \
-                'WHERE page_type_code = \'FRONTIER\' ' \
-                'LIMIT ' + str(N) + ';'
+                'WHERE page_type_code = \'FRONTIER\';'
 
         cursor.execute(query)
 
@@ -88,7 +87,7 @@ class Database:
         cursor = db.cursor()
 
         code = 'DUPLICATE' if duplicate else 'HTML'
-        html = 'NULL' if duplicate else html
+        html = None if duplicate else html
 
         query = 'UPDATE crawldb.page ' \
                 'SET page_type_code = %s, ' \
@@ -238,6 +237,17 @@ class Database:
         cursor.close()
         db.close()
 
+    def clear(self):
+        db = psql.connect(**self.config)
+        cursor = db.cursor()
+
+        query1 = 'TRUNCATE TABLE crawldb.page, crawldb.site, crawldb.link, crawldb.page_data, crawldb.image'
+
+        cursor.execute(query1)
+        db.commit()
+
+        cursor.close()
+        db.close()
 
 if __name__ == '__main__':
     # Init

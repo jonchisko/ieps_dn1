@@ -14,6 +14,11 @@ The following packages are required:
 9. time
 10. requests
 11. hashlib
+12. psycopg2
+13. datetime 
+14. re
+15. posixpath
+16. urllib.robotparser
 
 You need to install the chromedriver for selenium.
 

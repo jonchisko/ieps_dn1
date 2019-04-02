@@ -1,8 +1,8 @@
 # Web information extraction and retrieval - homework #1
 This is a web crawler implementation for the first homework for a course at FRI, UL.
 
-## Instructions:
-### Prerequisits: 
+## Instructions
+### Prerequisits 
 The following packages are required:
 1. os
 2. threading
